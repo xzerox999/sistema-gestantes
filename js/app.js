@@ -362,89 +362,163 @@ const app = {
     },
 
     async marcarAtencion(citaId, refId, tipoCita) {
+        // Cargar horarios para agendar (2da cita o reprogramación)
+        const resSlots = await this.fetchData('horario', 'read');
+        const slotsDisponibles = (resSlots.data || []).filter(s => s.estado === 'libre');
+
         const { value: formValues } = await Swal.fire({
-            title: 'Registrar Atención',
+            title: 'Registrar Atención Clínica',
+            width: '600px',
             html: `
-                <div class="text-left py-2">
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Observaciones</label>
-                    <textarea id="atencion-obs" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/10" rows="3"></textarea>
-                    
-                    <label class="block text-xs font-bold text-slate-400 uppercase mt-4 mb-2">Resultado</label>
-                    <select id="atencion-resultado" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 appearance-none">
-                        <option value="ASISTIO">Éxito / Asistió</option>
-                        <option value="NO_ASISTIO">Inasistencia</option>
-                        <option value="DERIVADO">Derivado a Especialista</option>
-                    </select>
+                <div class="text-left space-y-4 py-2">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Resultado de Prueba</label>
+                            <select id="at-resultado" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10">
+                                <option value="REACTIVO">REACTIVO</option>
+                                <option value="NO_REACTIVO">NO REACTIVO</option>
+                                <option value="PATOLOGICO">PATOLÓGICO</option>
+                                <option value="DERIVADO">DERIVADO</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Estado de Asistencia</label>
+                            <select id="at-estado" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10">
+                                <option value="ASISTIO">ASISTIÓ (Éxito)</option>
+                                <option value="NO_ASISTIO">NO ASISTIÓ (Inasistencia)</option>
+                                <option value="REPROGRAMADA">REPROGRAMADA</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">¿Acude?</label>
+                            <select id="at-acude" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10">
+                                <option value="TRUE">SÍ (Acude)</option>
+                                <option value="FALSE">NO (No acude)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">¿Teleorientación?</label>
+                            <select id="at-tele" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10">
+                                <option value="FALSE">NO</option>
+                                <option value="TRUE">SÍ</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="slot-selector-container" class="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 hidden">
+                        <label class="block text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2">Asignar Nueva Cita (Requerido)</label>
+                        <select id="at-next-slot" class="w-full bg-white border-0 rounded-xl px-4 py-3 text-sm font-semibold text-primary focus:ring-2 focus:ring-primary/10">
+                            <option value="">Seleccione un horario disponible...</option>
+                            ${slotsDisponibles.map(s => {
+                const f = new Date(s.fecha).toLocaleDateString();
+                const h = new Date(s.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return `<option value="${s.id}">${f} - ${h}</option>`;
+            }).join('')}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Observaciones / Evolución</label>
+                        <textarea id="at-obs" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10" rows="3"></textarea>
+                    </div>
                 </div>
             `,
-            confirmButtonText: 'Guardar Resultado',
+            didOpen: () => {
+                const stateSel = document.getElementById('at-estado');
+                const slotCont = document.getElementById('slot-selector-container');
+
+                const updateVisibility = () => {
+                    const state = stateSel.value;
+                    const needsNextSlot = (state === 'ASISTIO' && tipoCita === 'PRIMERA') ||
+                        (state === 'NO_ASISTIO' || state === 'REPROGRAMADA');
+
+                    if (needsNextSlot) {
+                        slotCont.classList.remove('hidden');
+                    } else {
+                        slotCont.classList.add('hidden');
+                    }
+                };
+
+                stateSel.addEventListener('change', updateVisibility);
+                updateVisibility();
+            },
+            confirmButtonText: 'Confirmar y Guardar',
             confirmButtonColor: '#2563eb',
             preConfirm: () => {
+                const state = document.getElementById('at-estado').value;
+                const nextSlotId = document.getElementById('at-next-slot').value;
+                const needsNext = (state === 'ASISTIO' && tipoCita === 'PRIMERA') ||
+                    (state === 'NO_ASISTIO' || state === 'REPROGRAMADA');
+
+                if (needsNext && !nextSlotId) {
+                    Swal.showValidationMessage('Debes elegir un horario para la siguiente cita / reprogramación');
+                    return false;
+                }
+
                 return {
-                    obs: document.getElementById('atencion-obs').value,
-                    resultado: document.getElementById('atencion-resultado').value
+                    resultado: document.getElementById('at-resultado').value,
+                    estado: state,
+                    acude: document.getElementById('at-acude').value,
+                    teleorientacion: document.getElementById('at-tele').value,
+                    obs: document.getElementById('at-obs').value,
+                    nextSlotId: nextSlotId
                 }
             }
         });
 
         if (!formValues) return;
 
-        Swal.fire({ title: 'Guardando...', didOpen: () => Swal.showLoading() });
+        Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-        // 1. Marcar Cita Antigua
+        // 1. Marcar Cita Actual como resuelta
         await this.fetchData('citas', 'update', {
             id: citaId,
-            "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": formValues.resultado
+            "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": formValues.estado
         });
 
-        // 2. Lógica según resultado
-        if (formValues.resultado === 'ASISTIO') {
-            const esFinal = (tipoCita === 'SEGUNDA');
+        // 2. Crear Registro de Atención (Solo si asistió)
+        const esAsistencia = formValues.estado === 'ASISTIO';
+        const esFinal = (tipoCita === 'SEGUNDA' && esAsistencia);
+
+        if (esAsistencia) {
             await this.fetchData('atenciones', 'create', {
                 id: "AT-" + Date.now(),
                 cita_id: citaId,
+                "resultado (REACTIVO/NO_REACTIVO/PATOLOGICO/DERIVADO)": formValues.resultado,
+                "acude (TRUE/FALSE)": formValues.acude,
+                "teleorientacion (TRUE/FALSE)": formValues.teleorientacion,
                 observaciones: formValues.obs,
-                cerrada: esFinal ? 'TRUE' : 'FALSE'
+                "cerrada (TRUE/FALSE)": esFinal ? 'TRUE' : 'FALSE'
+            });
+        }
+
+        // 3. Manejo de Siguiente Paso (Nueva Cita o Cierre)
+        if (esFinal) {
+            await this.fetchData('referencias', 'update', {
+                id: refId,
+                "estado (ACTIVA/CERRADA)": 'CERRADA'
+            });
+            Swal.fire('Atención Finalizada', 'Referencia marcada como CERRADA tras la 2da atención.', 'success');
+        } else if (formValues.nextSlotId) {
+            const nextSlot = resSlots.data.find(s => String(s.id) === String(formValues.nextSlotId));
+            const newCitaId = "CITA-" + Date.now();
+
+            await this.fetchData('citas', 'create', {
+                id: newCitaId,
+                referencia_id: refId,
+                fecha: nextSlot.fecha,
+                hora: nextSlot.hora,
+                "tipo (PRIMERA/SEGUNDA)": (formValues.estado === 'ASISTIO') ? 'SEGUNDA' : tipoCita,
+                "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": 'PROGRAMADA'
             });
 
-            if (esFinal) {
-                await this.fetchData('referencias', 'update', {
-                    id: refId,
-                    "estado (ACTIVA/CERRADA)": 'CERRADA'
-                });
-                Swal.fire('¡Cerrado!', 'La referencia ha sido finalizada con éxito.', 'success');
-            } else {
-                // Programar TIPO SEGUNDA si era primera
-                await this.fetchData('citas', 'create', {
-                    id: "CITA-" + Date.now(),
-                    referencia_id: refId,
-                    "tipo (PRIMERA/SEGUNDA)": 'SEGUNDA',
-                    "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": 'PROGRAMADA',
-                    fecha: 'Por definir', // Aquí podrías cargar de nuevo horarios si gustas
-                    hora: ''
-                });
-                Swal.fire('Atención 1 Guardada', 'Se ha habilitado espacio para la segunda cita.', 'info');
-            }
-        } else if (formValues.resultado === 'NO_ASISTIO') {
-            // Reprogramar misma cita (TIPO 1 o 2)
-            await this.fetchData('citas', 'create', {
-                id: "CITA-" + Date.now(),
-                referencia_id: refId,
-                "tipo (PRIMERA/SEGUNDA)": tipoCita,
-                "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": 'PROGRAMADA',
-                fecha: 'Reprogramada',
-                hora: ''
-            });
-            Swal.fire('Inasistencia', 'Cita marcada como inasistida. Nueva cita pendiente.', 'warning');
-        } else if (formValues.resultado === 'DERIVADO') {
-            const { value: espId } = await Swal.fire({
-                title: 'Especialidad',
-                input: 'select',
-                inputOptions: { '1': 'Ginecología', '2': 'Cardiología' }, // Mock
-                placeholder: 'Seleccione especialidad'
-            });
-            await this.fetchData('derivaciones', 'create', { atencion_id: "AT-" + Date.now(), especialidad_id: espId });
-            Swal.fire('Derivación', 'Paciente derivado correctamente.', 'info');
+            await this.fetchData('horario', 'update', { id: formValues.nextSlotId, estado: 'copado' });
+            Swal.fire('Acción Registrada', 'Se ha agendado la siguiente cita en el horario elegido.', 'success');
+        } else {
+            Swal.fire('Registrado', 'Atención guardada correctamente.', 'success');
         }
 
         this.loadReferencias();
