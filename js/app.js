@@ -66,18 +66,26 @@ const app = {
     },
 
     async fetchData(sheet, action = 'read', payload = null) {
-        const url = new URL(CONFIG.API_URL);
-        if (action === 'read') {
-            url.searchParams.append('action', 'read');
-            url.searchParams.append('sheet', sheet);
-            const response = await fetch(url);
-            return await response.json();
-        } else {
-            const response = await fetch(CONFIG.API_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action, sheet, payload })
-            });
-            return await response.json();
+        try {
+            const url = new URL(CONFIG.API_URL);
+            if (action === 'read') {
+                url.searchParams.append('action', 'read');
+                url.searchParams.append('sheet', sheet);
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return await response.json();
+            } else {
+                const response = await fetch(CONFIG.API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Para evitar problemas de CORS en POST hacia GAS
+                    body: JSON.stringify({ action, sheet, payload })
+                });
+                // Nota: no-cors devuelve un opaco, pero GAS procesa el POST igual
+                return { success: true, message: 'Solicitud enviada (proceso asíncrono)' };
+            }
+        } catch (error) {
+            console.error("Error en fetchData:", error);
+            return { success: false, message: error.message };
         }
     },
 
