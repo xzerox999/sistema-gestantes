@@ -22,22 +22,30 @@ const app = {
         }
     },
 
-    login() {
-        // Simulación de login para desarrollo inicial
-        // Aquí se implementará la verificación contra la hoja 'usuarios' de Sheets
-        console.log("Iniciando login...");
+    async login() {
+        console.log("Iniciando verificación...");
+        const res = await this.fetchData('usuarios', 'read');
 
-        // Mocking a successful user after a delay
-        setTimeout(() => {
-            const mockUser = {
-                name: "Hector Monzon",
-                email: "hmonzon77@gmail.com",
-                role: "hospital" // o 'eess'
-            };
-            this.user = mockUser;
-            localStorage.setItem('gestantes_user', JSON.stringify(mockUser));
-            this.showDashboard();
-        }, 1000);
+        if (res.success) {
+            // En un futuro usaremos el email real de Google Login
+            // Por ahora simulamos con el primer usuario de la lista o Hector
+            const foundUser = res.data.find(u => u.correo.includes("hmonzon77"));
+
+            if (foundUser) {
+                this.user = {
+                    name: foundUser.nombre_completo,
+                    email: foundUser.correo,
+                    establecimiento_id: foundUser.establecimiento_id,
+                    role: foundUser.establecimiento_id === "000025210" ? 'hospital' : 'eess'
+                };
+                localStorage.setItem('gestantes_user', JSON.stringify(this.user));
+                this.showDashboard();
+            } else {
+                alert("Usuario no registrado en la base de datos.");
+            }
+        } else {
+            alert("Error al conectar con la base de datos de usuarios.");
+        }
     },
 
     logout() {
@@ -59,7 +67,7 @@ const app = {
     },
 
     showDashboard() {
-        document.getElementById('user-name').textContent = this.user.name;
+        document.getElementById('user-name').textContent = `${this.user.name} (${this.user.establecimiento_id})`;
         document.getElementById('user-profile').style.display = 'flex';
         this.showView('dashboard-view');
         this.renderDashboard();
