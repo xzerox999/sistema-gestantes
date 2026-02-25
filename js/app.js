@@ -139,7 +139,8 @@ const app = {
                 url.searchParams.append('sheet', sheet);
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return await response.json();
+                const data = await response.json();
+                return { success: true, data: data.data || data }; // Manejar ambos casos de respuesta del script
             } else {
                 const response = await fetch(CONFIG.API_URL, {
                     method: 'POST',
@@ -155,7 +156,10 @@ const app = {
     },
 
     renderDashboard() {
+        console.log("Rendering Dashboard for role:", this.user.role, "ID:", this.user.establecimiento_id);
         const content = document.getElementById('dashboard-content');
+        if (!content) return;
+
         if (this.user.role === 'hospital') {
             this.renderHospitalDashboard(content);
         } else {
@@ -379,6 +383,10 @@ const app = {
 
         // Cargar horarios disponibles
         const resSlots = await this.fetchData('horario', 'read');
+        if (!resSlots.success) {
+            Swal.fire('Error', 'No se pudieron cargar los horarios. Verifica tu conexión.', 'error');
+            return;
+        }
         const slotsDisponibles = (resSlots.data || []).filter(s => s.estado === 'libre');
 
         section.innerHTML = `
@@ -440,7 +448,11 @@ const app = {
         // 2. Programar CITA 1
         // Buscamos el detalle del horario escogido
         const resSlots = await this.fetchData('horario', 'read');
+        if (!resSlots.success || !resSlots.data) {
+            throw new Error("No se pudo leer la tabla de horarios");
+        }
         const slot = resSlots.data.find(s => String(s.id) === String(data.horario_id));
+        if (!slot) throw new Error("Horario seleccionado no encontrado");
 
         const payloadCita = {
             id: "CITA-" + Date.now(),
@@ -460,13 +472,14 @@ const app = {
     },
 
     renderHospitalDashboard(container) {
+        console.log("Iniciando renderHospitalDashboard con TABS");
         container.innerHTML = `
-            <div class="mb-8 flex flex-wrap gap-2 p-1 bg-slate-100 rounded-2xl w-fit">
-                <button onclick="app.switchTabHosp('hosp-atenciones')" id="tab-hosp-atenciones" class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-primary">Bandeja de Referencias</button>
-                <button onclick="app.switchTabHosp('hosp-usuarios')" id="tab-hosp-usuarios" class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/50">Usuarios</button>
-                <button onclick="app.switchTabHosp('hosp-horarios')" id="tab-hosp-horarios" class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/50">Horarios</button>
-                <button onclick="app.switchTabHosp('hosp-especialidades')" id="tab-hosp-especialidades" class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/50">Especialidades</button>
-                <button onclick="app.switchTabHosp('hosp-stats')" id="tab-hosp-stats" class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/50">Estadísticas</button>
+            <div class="mb-10 flex flex-wrap gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit border border-slate-200/50 shadow-inner">
+                <button onclick="app.switchTabHosp('hosp-atenciones')" id="tab-hosp-atenciones" class="px-6 py-3 rounded-xl text-sm font-bold transition-all bg-white shadow-md text-primary">Bandeja de Referencias</button>
+                <button onclick="app.switchTabHosp('hosp-usuarios')" id="tab-hosp-usuarios" class="px-6 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/50">Usuarios</button>
+                <button onclick="app.switchTabHosp('hosp-horarios')" id="tab-hosp-horarios" class="px-6 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/50">Horarios</button>
+                <button onclick="app.switchTabHosp('hosp-especialidades')" id="tab-hosp-especialidades" class="px-6 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/50">Especialidades</button>
+                <button onclick="app.switchTabHosp('hosp-stats')" id="tab-hosp-stats" class="px-6 py-3 rounded-xl text-sm font-bold transition-all text-slate-500 hover:bg-white/50">Estadísticas</button>
             </div>
 
             <div id="section-hosp-atenciones" class="hosp-section">
