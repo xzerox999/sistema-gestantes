@@ -324,9 +324,19 @@ const app = {
     },
 
     async loadReferencias() {
+        Swal.fire({
+            title: 'Cargando bandeja...',
+            didOpen: () => Swal.showLoading(),
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            timer: 3000 // A bit more for safety
+        });
+
         const resRef = await this.fetchData('referencias', 'read');
         const resGest = await this.fetchData('gestantes', 'read');
         const resCitas = await this.fetchData('citas', 'read');
+
+        Swal.close();
 
         const list = document.getElementById('referencias-list');
         const activas = (resRef.data || []).filter(r => r['estado (ACTIVA/CERRADA)'] === 'ACTIVA');
@@ -362,12 +372,22 @@ const app = {
     },
 
     async marcarAtencion(citaId, refId, tipoCita) {
-        // Cargar horarios para agendar (2da cita o reprogramación)
-        const resSlots = await this.fetchData('horario', 'read');
+        // Feedback inmediato mientras cargamos datos adicionales
+        Swal.fire({ title: 'Preparando atención...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+        // Cargar horarios y especialidades
+        const [resSlots, resEsp] = await Promise.all([
+            this.fetchData('horario', 'read'),
+            this.fetchData('especialidades', 'read')
+        ]);
+
         const slotsDisponibles = (resSlots.data || []).filter(s => s.estado === 'libre');
+        const listaEsp = resEsp.data || [];
+
+        Swal.close();
 
         const { value: formValues } = await Swal.fire({
-            title: 'Registrar Atención Clínica',
+            title: `Registrar Atención Clínica (${tipoCita})`,
             width: '600px',
             html: `
                 <div class="text-left space-y-4 py-2">
@@ -391,7 +411,7 @@ const app = {
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
+                    <div id="acude-container" class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">¿Acude?</label>
                             <select id="at-acude" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10">
@@ -406,6 +426,14 @@ const app = {
                                 <option value="TRUE">SÍ</option>
                             </select>
                         </div>
+                    </div>
+
+                    <div id="esp-selector-container" class="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 hidden">
+                        <label class="block text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-2">Especialidad de Derivación</label>
+                        <select id="at-esp" class="w-full bg-white border-0 rounded-xl px-4 py-3 text-sm font-semibold text-indigo-700 focus:ring-2 focus:ring-indigo-100">
+                            <option value="">Seleccione especialidad...</option>
+                            ${listaEsp.map(e => `<option value="${e.id}">${e.nombre}</option>`).join('')}
+                        </select>
                     </div>
 
                     <div id="slot-selector-container" class="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 hidden">
@@ -427,29 +455,40 @@ const app = {
                 </div>
             `,
             didOpen: () => {
+                const resSel = document.getElementById('at-resultado');
                 const stateSel = document.getElementById('at-estado');
                 const slotCont = document.getElementById('slot-selector-container');
+                const espCont = document.getElementById('esp-selector-container');
+                const acudeCont = document.getElementById('acude-container');
 
                 const updateVisibility = () => {
                     const state = stateSel.value;
+                    const res = resSel.value;
+
+                    // Lógica de Slot
                     const needsNextSlot = (state === 'ASISTIO' && tipoCita === 'PRIMERA') ||
                         (state === 'NO_ASISTIO' || state === 'REPROGRAMADA');
+                    slotCont.classList.toggle('hidden', !needsNextSlot);
 
-                    if (needsNextSlot) {
-                        slotCont.classList.remove('hidden');
-                    } else {
-                        slotCont.classList.add('hidden');
-                    }
+                    // Lógica de Derivación
+                    espCont.classList.toggle('hidden', res !== 'DERIVADO');
+
+                    // Lógica de Acude: si asiste, se oculta el campo acude (se asume TRUE)
+                    acudeCont.classList.toggle('hidden', state === 'ASISTIO');
                 };
 
                 stateSel.addEventListener('change', updateVisibility);
+                resSel.addEventListener('change', updateVisibility);
                 updateVisibility();
             },
             confirmButtonText: 'Confirmar y Guardar',
             confirmButtonColor: '#2563eb',
             preConfirm: () => {
                 const state = document.getElementById('at-estado').value;
+                const res = document.getElementById('at-resultado').value;
                 const nextSlotId = document.getElementById('at-next-slot').value;
+                const espId = document.getElementById('at-esp').value;
+
                 const needsNext = (state === 'ASISTIO' && tipoCita === 'PRIMERA') ||
                     (state === 'NO_ASISTIO' || state === 'REPROGRAMADA');
 
@@ -458,13 +497,19 @@ const app = {
                     return false;
                 }
 
+                if (res === 'DERIVADO' && !espId) {
+                    Swal.showValidationMessage('Debes elegir una especialidad para la derivación');
+                    return false;
+                }
+
                 return {
-                    resultado: document.getElementById('at-resultado').value,
+                    resultado: res,
                     estado: state,
-                    acude: document.getElementById('at-acude').value,
+                    acude: state === 'ASISTIO' ? 'TRUE' : document.getElementById('at-acude').value,
                     teleorientacion: document.getElementById('at-tele').value,
                     obs: document.getElementById('at-obs').value,
-                    nextSlotId: nextSlotId
+                    nextSlotId: nextSlotId,
+                    espId: espId
                 }
             }
         });
@@ -482,10 +527,11 @@ const app = {
         // 2. Crear Registro de Atención (Solo si asistió)
         const esAsistencia = formValues.estado === 'ASISTIO';
         const esFinal = (tipoCita === 'SEGUNDA' && esAsistencia);
+        const atId = "AT-" + Date.now();
 
         if (esAsistencia) {
             await this.fetchData('atenciones', 'create', {
-                id: "AT-" + Date.now(),
+                id: atId,
                 cita_id: citaId,
                 "resultado (REACTIVO/NO_REACTIVO/PATOLOGICO/DERIVADO)": formValues.resultado,
                 "acude (TRUE/FALSE)": formValues.acude,
@@ -493,6 +539,15 @@ const app = {
                 observaciones: formValues.obs,
                 "cerrada (TRUE/FALSE)": esFinal ? 'TRUE' : 'FALSE'
             });
+
+            // 2.1 Si es DERIVADO, guardar en hoja derivaciones
+            if (formValues.resultado === 'DERIVADO') {
+                await this.fetchData('derivaciones', 'create', {
+                    id: "DER-" + Date.now(),
+                    atencion_id: atId,
+                    especialidad_id: formValues.espId
+                });
+            }
         }
 
         // 3. Manejo de Siguiente Paso (Nueva Cita o Cierre)
