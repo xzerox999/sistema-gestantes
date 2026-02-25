@@ -11,13 +11,28 @@ const app = {
     init() {
         console.log("App iniciada");
         this.checkAuth();
+        this.setupEventListeners();
+    },
+
+    setupEventListeners() {
+        const loginForm = document.getElementById('form-login');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => this.login(e));
+            console.log("Event listener de login configurado");
+        }
     },
 
     checkAuth() {
         const savedUser = localStorage.getItem('gestantes_user');
+        console.log("Verificando auth, usuario guardado:", savedUser);
         if (savedUser) {
-            this.user = JSON.parse(savedUser);
-            this.showDashboard();
+            try {
+                this.user = JSON.parse(savedUser);
+                this.showDashboard();
+            } catch (e) {
+                console.error("Error parseando usuario guardado:", e);
+                this.showLogin();
+            }
         } else {
             this.showLogin();
         }
@@ -25,9 +40,19 @@ const app = {
 
     async login(event) {
         if (event) event.preventDefault();
+        console.log("Iniciando proceso de login...");
 
-        const email = document.getElementById('login-email').value.trim();
-        const dni = document.getElementById('login-dni').value.trim();
+        const emailEl = document.getElementById('login-email');
+        const dniEl = document.getElementById('login-dni');
+
+        if (!emailEl || !dniEl) {
+            console.error("No se encontraron los campos de login");
+            return;
+        }
+
+        const email = emailEl.value.trim();
+        const dni = dniEl.value.trim();
+        console.log("Credenciales ingresadas:", email, "DNI:", dni.length > 0 ? "****" : "vacío");
 
         if (!email || !dni) {
             Swal.fire('Error', 'Por favor completa todos los campos.', 'warning');
@@ -104,6 +129,7 @@ const app = {
         try {
             const url = new URL(CONFIG.API_URL);
             if (action === 'read') {
+                console.log(`Pidiendo datos de la hoja: ${sheet}...`);
                 url.searchParams.append('action', 'read');
                 url.searchParams.append('sheet', sheet);
                 const response = await fetch(url);
