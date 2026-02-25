@@ -329,13 +329,13 @@ const app = {
         const resCitas = await this.fetchData('citas', 'read');
 
         const list = document.getElementById('referencias-list');
-        const activas = (resRef.data || []).filter(r => r.estado === 'ACTIVA');
+        const activas = (resRef.data || []).filter(r => r['estado (ACTIVA/CERRADA)'] === 'ACTIVA');
 
         if (this.dataTable) this.dataTable.destroy();
 
         list.innerHTML = activas.map(ref => {
             const gest = resGest.data.find(g => g.id === ref.gestante_id) || { nombres: 'N/A' };
-            const cita = resCitas.data.find(c => c.referencia_id === ref.id && c.estado === 'PROGRAMADA');
+            const cita = resCitas.data.find(c => c.referencia_id === ref.id && c['estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)'] === 'PROGRAMADA');
 
             return `
                 <tr class="hover:bg-slate-50 transition-colors group">
