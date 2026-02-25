@@ -222,6 +222,7 @@ const app = {
                                     <th class="pb-4">Ref #</th>
                                     <th class="pb-4">Gestante</th>
                                     <th class="pb-4">Estado</th>
+                                    <th class="pb-4">Tipo</th>
                                     <th class="pb-4">Cita</th>
                                     <th class="pb-4 text-right">Acciones</th>
                                 </tr>
@@ -272,22 +273,27 @@ const app = {
                 <tr class="hover:bg-slate-50">
                     <td class="py-4 font-bold text-sm">${ref.numero_correlativo}</td>
                     <td class="py-4">
-                        <p class="font-semibold text-slate-700">${gest.nombres}</p>
+                        <p class="font-semibold text-slate-700 leading-tight">${gest.nombres}</p>
                         <span class="text-[10px] text-slate-400">${ref.motivo_referencia}</span>
                     </td>
                     <td class="py-4">
-                        <span class="px-2 py-1 rounded-full text-[10px] font-bold ${ref['estado (ACTIVA/CERRADA)'] === 'ACTIVA' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'}">
+                        <span class="px-2 py-1 rounded-full text-[9px] font-bold ${ref['estado (ACTIVA/CERRADA)'] === 'ACTIVA' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'}">
                             ${ref['estado (ACTIVA/CERRADA)']}
                         </span>
                     </td>
-                    <td class="py-4 text-xs">
-                        ${cita ? `${new Date(cita.fecha).toLocaleDateString()} ${new Date(cita.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'N/A'}
+                    <td class="py-4 font-bold text-[10px] uppercase text-slate-500">
+                        ${cita ? cita['tipo (PRIMERA/SEGUNDA)'] : '-'}
                     </td>
-                    <td class="py-4 text-right flex justify-end gap-1">
-                        ${!atendida ? `
-                            <button onclick="app.reprogramarReferencia('${ref.id}', '${cita?.id}', '${cita?.horario_id}')" class="text-blue-400 hover:text-blue-600 p-2" title="Reprogramar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
-                            <button onclick="app.eliminarReferencia('${ref.id}', '${cita?.id}', '${cita?.horario_id}')" class="text-red-400 hover:text-red-600 p-2" title="Eliminar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                        ` : ''}
+                    <td class="py-4 text-[10px] whitespace-nowrap">
+                        ${cita ? `<span class="font-bold text-slate-700">${new Date(cita.fecha).toLocaleDateString()}</span><br><span class="text-slate-400 font-medium">${new Date(cita.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : 'N/A'}
+                    </td>
+                    <td class="py-4 text-right">
+                        <div class="flex justify-end gap-1">
+                            ${!atendida ? `
+                                <button onclick="app.reprogramarReferencia('${ref.id}', '${cita?.id}', '${cita?.horario_id}')" class="text-blue-400 hover:text-blue-600 p-2" title="Reprogramar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+                                <button onclick="app.eliminarReferencia('${ref.id}', '${cita?.id}', '${cita?.horario_id}')" class="text-red-400 hover:text-red-600 p-2" title="Eliminar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                            ` : '<span class="text-[9px] font-bold text-slate-300 uppercase px-2">Atendida</span>'}
+                        </div>
                     </td>
                 </tr>
             `;
@@ -494,10 +500,11 @@ const app = {
                     <div class="overflow-x-auto">
                         <table id="table-referencias" class="w-full text-left border-collapse">
                             <thead>
-                                <tr class="text-slate-400 text-xs font-bold uppercase tracking-widest border-b border-slate-50">
+                                <tr class="text-slate-400 text-[10px] font-bold uppercase tracking-widest border-b border-slate-50">
                                     <th class="pb-4 pt-0">Ref #</th>
                                     <th class="pb-4 pt-0">Gestante</th>
                                     <th class="pb-4 pt-0">Cita</th>
+                                    <th class="pb-4 pt-0">Tipo</th>
                                     <th class="pb-4 pt-0 text-right">Acciones</th>
                                 </tr>
                             </thead>
@@ -647,10 +654,13 @@ const app = {
                         <span class="text-[10px] text-slate-400 font-bold">${ref.motivo_referencia}</span>
                     </td>
                     <td class="py-4">
-                        ${cita ? `<span class="bg-green-50 text-green-600 px-3 py-1 rounded-full text-[11px] font-bold">📅 ${new Date(cita.fecha).toLocaleDateString()} ${new Date(cita.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : '<span class="text-slate-300">Sin cita</span>'}
+                        ${cita ? `<span class="bg-green-50 text-green-600 px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap">📅 ${new Date(cita.fecha).toLocaleDateString()}</span><br><span class="text-[9px] text-slate-400 ml-5">${new Date(cita.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : '<span class="text-slate-300">Sin cita</span>'}
+                    </td>
+                    <td class="py-4 font-bold text-[10px]">
+                        ${cita ? `<span class="${cita['tipo (PRIMERA/SEGUNDA)'] === 'PRIMERA' ? 'text-blue-500' : 'text-indigo-500'}">${cita['tipo (PRIMERA/SEGUNDA)']}</span>` : '-'}
                     </td>
                     <td class="py-4 text-right">
-                        ${cita ? `<button onclick="app.marcarAtencion('${cita.id}', '${ref.id}', '${cita['tipo (PRIMERA/SEGUNDA)']}')" class="bg-primary text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-primary/10 transition-transform active:scale-95">Atención</button>` : ''}
+                        ${cita ? `<button onclick="app.marcarAtencion('${cita.id}', '${ref.id}', '${cita['tipo (PRIMERA/SEGUNDA)']}')" class="bg-primary text-white px-3 py-2 rounded-lg text-[10px] font-bold shadow-md shadow-primary/10 transition-transform active:scale-95 whitespace-nowrap">Atención</button>` : ''}
                     </td>
                 </tr>
             `;
@@ -703,17 +713,17 @@ const app = {
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-100/50 p-4 rounded-2xl">
                         <div id="acude-container">
                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">¿Acude?</label>
-                            <select id="at-acude" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10">
+                            <select id="at-acude" class="w-full bg-white border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10 font-bold">
                                 <option value="TRUE">SÍ (Acude)</option>
                                 <option value="FALSE">NO (No acude)</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">¿Teleorientación?</label>
-                            <select id="at-tele" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10">
+                        <div id="tele-container">
+                            <label class="block text-[10px] font-bold text-primary uppercase tracking-widest mb-1">¿Teleorientación?</label>
+                            <select id="at-tele" class="w-full bg-white border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10 font-bold text-primary border-2 border-primary/20">
                                 <option value="FALSE">NO</option>
                                 <option value="TRUE">SÍ</option>
                             </select>
