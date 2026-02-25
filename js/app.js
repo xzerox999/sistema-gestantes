@@ -76,12 +76,14 @@ const app = {
                     establecimiento_id: estId,
                     role: estId === CONFIG.HOSPITAL_ID ? 'hospital' : 'eess'
                 };
-                localStorage.setItem('gestantes_user', JSON.stringify(this.user));
-
                 // Cargar nombre del establecimiento
                 const resEst = await this.fetchData('establecimientos', 'read');
-                const est = (resEst.data || []).find(e => String(e.id).trim().padStart(9, '0') === estId);
-                if (est) this.user.establecimiento_nombre = est.nombre;
+                if (resEst.success && resEst.data) {
+                    const est = resEst.data.find(e => String(e.id).trim().padStart(9, '0') === estId);
+                    if (est) this.user.establecimiento_nombre = est.nombre;
+                }
+
+                localStorage.setItem('gestantes_user', JSON.stringify(this.user));
 
                 Swal.fire({
                     icon: 'success',
@@ -125,6 +127,7 @@ const app = {
         if (nameEl) {
             const estName = this.user.establecimiento_nombre ? ` | ${this.user.establecimiento_nombre}` : '';
             nameEl.textContent = `${this.user.name}${estName} (${this.user.establecimiento_id})`;
+            nameEl.classList.add('text-slate-800', 'font-bold'); // Asegurar visibilidad
         }
         if (profileEl) profileEl.style.display = 'flex';
         this.showView('dashboard-view');
@@ -700,8 +703,8 @@ const app = {
                         </div>
                     </div>
 
-                    <div id="acude-container" class="grid grid-cols-2 gap-4">
-                        <div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div id="acude-container">
                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">¿Acude?</label>
                             <select id="at-acude" class="w-full bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/10">
                                 <option value="TRUE">SÍ (Acude)</option>
@@ -860,9 +863,7 @@ const app = {
             });
 
             await this.fetchData('horario', 'update', { id: formValues.nextSlotId, estado: 'copado' });
-            Swal.fire('Acción Registrada', 'Se ha agendado la siguiente cita en el horario elegido.', 'success');
-        } else {
-            await Swal.fire('Registrado', 'Atención guardada correctamente.', 'success');
+            await Swal.fire({ icon: 'success', title: '¡Éxito!', text: 'Su atención fue registrada', confirmButtonColor: '#2563eb' });
         }
 
         this.loadReferencias();
