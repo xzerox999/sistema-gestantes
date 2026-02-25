@@ -9,7 +9,6 @@ const app = {
     dataTable: null,
 
     init() {
-        console.log("App iniciada");
         this.checkAuth();
         this.setupEventListeners();
     },
@@ -18,19 +17,17 @@ const app = {
         const loginForm = document.getElementById('form-login');
         if (loginForm) {
             loginForm.addEventListener('submit', (e) => this.login(e));
-            console.log("Event listener de login configurado");
         }
     },
 
     checkAuth() {
         const savedUser = localStorage.getItem('gestantes_user');
-        console.log("Verificando auth, usuario guardado:", savedUser);
         if (savedUser) {
             try {
                 this.user = JSON.parse(savedUser);
                 this.showDashboard();
             } catch (e) {
-                console.error("Error parseando usuario guardado:", e);
+                console.error("Error parseando sesión:", e);
                 this.showLogin();
             }
         } else {
@@ -40,37 +37,32 @@ const app = {
 
     async login(event) {
         if (event) event.preventDefault();
-        console.log("Iniciando proceso de login...");
 
         const emailEl = document.getElementById('login-email');
         const dniEl = document.getElementById('login-dni');
 
         if (!emailEl || !dniEl) {
-            console.error("No se encontraron los campos de login");
+            console.error("Crítico: No se encontraron los campos de texto");
+            Swal.fire('Error Interno', 'No se pudieron encontrar los campos de login.', 'error');
             return;
         }
 
         const email = emailEl.value.trim();
         const dni = dniEl.value.trim();
-        console.log("Credenciales ingresadas:", email, "DNI:", dni.length > 0 ? "****" : "vacío");
 
         if (!email || !dni) {
-            Swal.fire('Error', 'Por favor completa todos los campos.', 'warning');
+            Swal.fire('Campos vacíos', 'Ingresa usuario y contraseña.', 'warning');
             return;
         }
 
         Swal.fire({
-            title: 'Verificando...',
-            text: 'Buscando en la base de datos de usuarios',
-            allowOutsideClick: false,
+            title: 'Validando...',
             didOpen: () => Swal.showLoading()
         });
 
-        localStorage.removeItem('gestantes_user');
         const res = await this.fetchData('usuarios', 'read');
 
         if (res.success) {
-            // Buscamos coincidencia exacta de correo Y dni
             const foundUser = res.data.find(u =>
                 u.correo.trim().toLowerCase() === email.toLowerCase() &&
                 String(u.dni).trim() === String(dni)
@@ -87,40 +79,45 @@ const app = {
                 localStorage.setItem('gestantes_user', JSON.stringify(this.user));
                 Swal.fire({
                     icon: 'success',
-                    title: '¡Acceso Correcto!',
-                    text: `Bienvenido, ${this.user.name}`,
-                    timer: 2000,
+                    title: '¡Bienvenido!',
+                    text: this.user.name,
+                    timer: 1500,
                     showConfirmButton: false
                 });
                 this.showDashboard();
             } else {
-                Swal.fire('Error de Acceso', 'Correo o DNI incorrectos. Verifica tus credenciales.', 'error');
+                Swal.fire('Error', 'Correo o DNI incorrectos.', 'error');
             }
         } else {
-            Swal.fire('Error', 'No se pudo conectar con la base de datos.', 'error');
+            Swal.fire('Error', 'No hay conexión con la base de datos.', 'error');
         }
     },
 
     logout() {
-        this.user = null;
         localStorage.removeItem('gestantes_user');
-        this.showLogin();
+        window.location.reload(); // Recarga limpia
     },
 
     showView(viewId) {
         ['login-view', 'dashboard-view'].forEach(id => {
-            document.getElementById(id).style.display = (id === viewId) ? 'block' : 'none';
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = (id === viewId) ? 'block' : 'none';
+            }
         });
     },
 
     showLogin() {
-        document.getElementById('user-profile').style.display = 'none';
+        const profile = document.getElementById('user-profile');
+        if (profile) profile.style.display = 'none';
         this.showView('login-view');
     },
 
     showDashboard() {
-        document.getElementById('user-name').textContent = `${this.user.name} (${this.user.establecimiento_id})`;
-        document.getElementById('user-profile').style.display = 'flex';
+        const nameEl = document.getElementById('user-name');
+        const profileEl = document.getElementById('user-profile');
+        if (nameEl) nameEl.textContent = `${this.user.name} (${this.user.establecimiento_id})`;
+        if (profileEl) profileEl.style.display = 'flex';
         this.showView('dashboard-view');
         this.renderDashboard();
     },
@@ -129,7 +126,6 @@ const app = {
         try {
             const url = new URL(CONFIG.API_URL);
             if (action === 'read') {
-                console.log(`Pidiendo datos de la hoja: ${sheet}...`);
                 url.searchParams.append('action', 'read');
                 url.searchParams.append('sheet', sheet);
                 const response = await fetch(url);
@@ -243,7 +239,11 @@ const app = {
                     <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 text-primary">Escoger Cita (Tupac Amru)</label>
                     <select name="horario_id" required class="w-full bg-blue-50 border-0 rounded-xl px-4 py-3 font-semibold text-primary">
                         <option value="">Seleccione un horario...</option>
-                        ${slotsDisponibles.map(s => `<option value="${s.id}">${s.fecha} - ${s.hora}</option>`).join('')}
+                        ${slotsDisponibles.map(s => {
+            const f = new Date(s.fecha).toLocaleDateString();
+            const h = new Date(s.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `<option value="${s.id}">${f} - ${h}</option>`;
+        }).join('')}
                     </select>
                 </div>
                 <button type="submit" class="w-full bg-primary hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-primary/25">
@@ -268,7 +268,7 @@ const app = {
             gestante_id: this.currentGestante.id,
             establecimiento_origen_id: this.user.establecimiento_id,
             ...data,
-            estado: "ACTIVA"
+            "estado (ACTIVA/CERRADA)": "ACTIVA"
         };
 
         // 1. Crear Referencia
@@ -284,8 +284,8 @@ const app = {
             referencia_id: refId,
             fecha: slot.fecha,
             hora: slot.hora,
-            tipo: "PRIMERA",
-            estado: "PROGRAMADA"
+            "tipo (PRIMERA/SEGUNDA)": "PRIMERA",
+            "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": "PROGRAMADA"
         };
         await this.fetchData('citas', 'create', payloadCita);
 
@@ -345,10 +345,10 @@ const app = {
                         <span class="text-[10px] text-slate-400 font-bold">${ref.motivo_referencia}</span>
                     </td>
                     <td class="py-4">
-                        ${cita ? `<span class="bg-green-50 text-green-600 px-3 py-1 rounded-full text-[11px] font-bold">📅 ${cita.fecha} ${cita.hora}</span>` : '<span class="text-slate-300">Sin cita</span>'}
+                        ${cita ? `<span class="bg-green-50 text-green-600 px-3 py-1 rounded-full text-[11px] font-bold">📅 ${new Date(cita.fecha).toLocaleDateString()} ${new Date(cita.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : '<span class="text-slate-300">Sin cita</span>'}
                     </td>
                     <td class="py-4 text-right">
-                        ${cita ? `<button onclick="app.marcarAtencion('${cita.id}', '${ref.id}', '${cita.tipo}')" class="bg-primary text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-primary/10 transition-transform active:scale-95">Atención</button>` : ''}
+                        ${cita ? `<button onclick="app.marcarAtencion('${cita.id}', '${ref.id}', '${cita['tipo (PRIMERA/SEGUNDA)']}')" class="bg-primary text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-primary/10 transition-transform active:scale-95">Atención</button>` : ''}
                     </td>
                 </tr>
             `;
@@ -392,7 +392,10 @@ const app = {
         Swal.fire({ title: 'Guardando...', didOpen: () => Swal.showLoading() });
 
         // 1. Marcar Cita Antigua
-        await this.fetchData('citas', 'update', { id: citaId, estado: formValues.resultado });
+        await this.fetchData('citas', 'update', {
+            id: citaId,
+            "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": formValues.resultado
+        });
 
         // 2. Lógica según resultado
         if (formValues.resultado === 'ASISTIO') {
@@ -405,15 +408,18 @@ const app = {
             });
 
             if (esFinal) {
-                await this.fetchData('referencias', 'update', { id: refId, estado: 'CERRADA' });
+                await this.fetchData('referencias', 'update', {
+                    id: refId,
+                    "estado (ACTIVA/CERRADA)": 'CERRADA'
+                });
                 Swal.fire('¡Cerrado!', 'La referencia ha sido finalizada con éxito.', 'success');
             } else {
                 // Programar TIPO SEGUNDA si era primera
                 await this.fetchData('citas', 'create', {
                     id: "CITA-" + Date.now(),
                     referencia_id: refId,
-                    tipo: 'SEGUNDA',
-                    estado: 'PROGRAMADA',
+                    "tipo (PRIMERA/SEGUNDA)": 'SEGUNDA',
+                    "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": 'PROGRAMADA',
                     fecha: 'Por definir', // Aquí podrías cargar de nuevo horarios si gustas
                     hora: ''
                 });
@@ -424,8 +430,8 @@ const app = {
             await this.fetchData('citas', 'create', {
                 id: "CITA-" + Date.now(),
                 referencia_id: refId,
-                tipo: tipoCita,
-                estado: 'PROGRAMADA',
+                "tipo (PRIMERA/SEGUNDA)": tipoCita,
+                "estado (PROGRAMADA/ASISTIO/NO_ASISTIO/REPROGRAMADA)": 'PROGRAMADA',
                 fecha: 'Reprogramada',
                 hora: ''
             });
@@ -446,4 +452,6 @@ const app = {
 };
 
 window.app = app;
-app.init();
+document.addEventListener('DOMContentLoaded', () => {
+    app.init();
+});
